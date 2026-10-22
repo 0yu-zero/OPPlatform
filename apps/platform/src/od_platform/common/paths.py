@@ -96,6 +96,12 @@ DOCS_DIR: Path = ROOT_DIR / "docs"
 # ============================================================
 SCRIPTS_DIR: Path = ROOT_DIR / "scripts"
 
+# ============================================================
+# 【工具元数据目录】(审计日志等工具自身数据)
+# ============================================================
+META_DIR: Path = ROOT_DIR / ".odp-meta"
+META_LOGGING_DIR: Path = META_DIR / "logs"
+
 
 # ============================================================
 # 对外暴露的"要初始化的目录列表"
@@ -126,7 +132,96 @@ def get_dirs_to_initialize() -> List[Path]:
         # 工程基础设施
         SCRIPTS_DIR,
         DOCS_DIR,
+        # 元工具审计日志,不属于业务 reset 清理范围
+        META_LOGGING_DIR,
     ]
+
+
+def _get_reset_children(directory: Path) -> List[Path]:
+    """返回可清理的直接子项,保留目录中的 Git 跟踪 README。"""
+    if not directory.exists():
+        return []
+
+    return [
+        path
+        for path in directory.iterdir()
+        if path.name != "README.md"
+    ]
+
+
+def get_paths_to_reset() -> List[Path]:
+    """
+    返回 reset_project 可以安全删除的路径列表。
+
+    和 get_dirs_to_initialize 的关键差异:
+        - init:  "启动时要确保存在的目录"——可能含 git 追踪目录(如 docs/)
+        - reset: "可以被清理的运行时产物路径"——不包含 Git 跟踪文件
+
+    安全原则:
+        ✅ 只列【.gitignore 忽略的】运行时产物
+        ❌ 不列 Git 跟踪文件(如 runs/README.md 和 models/trained/README.md)
+        ❌ 用户的【原始数据】(RAW_DATA_DIR)绝不列入
+
+    runs/ 和 models/trained/ 中有 Git 跟踪的 README,因此只列它们的直接子项,
+    不能把父目录本身交给删除操作。
+    """
+    paths: List[Path] = [
+        # 这些目录没有 Git 跟踪文件,可以整体清理
+        PROCESSED_DATA_DIR,
+        # 逐项清理,保留目录中的 README.md
+        *_get_reset_children(RUNS_DIR),
+        *_get_reset_children(TRAINED_MODELS_DIR),
+        # 由 reset 执行器在关闭项目日志 handlers 后最后清理
+        LOGGING_DIR,
+        # 注意:以下目录【不在】 reset 范围内——
+        #   RAW_DATA_DIR           : 用户辛苦准备的原始数据,reset 绝不碰
+        #   PRETRAINED_MODELS_DIR  : 预训练权重(下载来的输入,很大,重下载耗时)
+        #   CONFIGS_DIR / UNIT_TEST_DIR / SCRIPTS_DIR / DOCS_DIR : 都进 git
+        #   META_DIR               : reset/doctor 等元工具的审计数据
+    ]
+    return [path for path in paths if not is_protected(path)]
+
+
+# ============================================================
+# 【绝对保护目录】reset 工具永远不能删除这些
+# ============================================================
+# 这是【最后一道安全网】——即使 get_paths_to_reset() 写错了,
+# reset 也会拒绝删除这些目录。
+PROTECTED_DIRS: tuple[Path, ...] = (
+    ROOT_DIR,
+    ROOT_DIR / "apps",
+    ROOT_DIR / "packages",
+    APP_DIR,
+    APP_DIR / "src",
+    SCRIPTS_DIR,
+    DOCS_DIR,
+    UNIT_TEST_DIR,
+    CONFIGS_DIR,
+    RAW_DATA_DIR,
+    PRETRAINED_MODELS_DIR,
+    META_DIR,
+    META_LOGGING_DIR,
+    ROOT_DIR / ".git",
+    ROOT_DIR / ".odp-workspace",
+)
+
+
+def is_protected(path: Path) -> bool:
+    """
+    路径是否受保护(任一满足即受保护):
+        1. 路径本身在 PROTECTED_DIRS 中
+        2. 路径是某个 PROTECTED_DIRS 成员的【祖先目录】
+           (例如 ROOT_DIR 是 SCRIPTS_DIR 的祖先——删 ROOT_DIR
+            就连带删了 SCRIPTS_DIR,所以删祖先也得拦)
+    """
+    path = path.resolve(strict=False)
+    for protected in PROTECTED_DIRS:
+        protected_resolved = protected.resolve(strict=False)
+        if path == protected_resolved:
+            return True
+        if protected_resolved.is_relative_to(path):
+            return True
+    return False
 
 
 if __name__ == "__main__":

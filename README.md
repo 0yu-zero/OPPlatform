@@ -18,6 +18,14 @@ pip install -e ./apps/platform
 odp-init
 ```
 
+重置时清理派生数据、训练运行产物、训练权重和日志（默认会要求确认）：
+
+```bash
+odp-reset
+```
+
+在自动化场景中可用 `odp-reset --yes` 跳过交互确认。
+
 ## 开发期（未装包）入口
 
 ```bash

@@ -115,6 +115,37 @@ SCRIPTS_DIR: Path = ROOT_DIR / "scripts"
 META_DIR: Path = ROOT_DIR / ".odp-meta"
 META_LOGGING_DIR: Path = META_DIR / "logs"
 
+VALIDATION_RUNS_DIR: Path = RUNS_DIR / "data_validation"   # 质检报告的家(按需创建,不进 init 清单)
+
+
+def validation_run_dir(run_id: str) -> Path:
+    return VALIDATION_RUNS_DIR / run_id
+
+
+# ============================================================
+# D5 增量: 运行配置目录 (跟 D3 立的 DATASET_CONFIGS_DIR 语义完全不同)
+#   DATASET_CONFIGS_DIR: 描述【数据】的 yaml (odp-transform 产出)
+#   RUNTIME_CONFIGS_DIR : 描述【跑法】的 yaml (runtime_config 子系统产出)
+# 两类 yaml 物理分目录, 语义不会互相污染.
+# ============================================================
+RUNTIME_CONFIGS_DIR: Path = CONFIGS_DIR / "runtime"
+
+
+def runtime_config_path(name: str) -> Path:
+    """返回某个运行配置文件的路径: <CONFIGS_DIR>/runtime/<name>.yaml
+
+    Args:
+        name: 配置名 (如 "train" / "val" / "infer"), 不带 .yaml 后缀
+
+    Returns:
+        Path 对象 (尚未创建, 调用方自己负责 mkdir)
+
+    用法:
+        train_yaml = runtime_config_path("train")
+        # → <APP_DIR>/configs/runtime/train.yaml
+    """
+    return RUNTIME_CONFIGS_DIR / f"{name}.yaml"
+
 
 # ============================================================
 # 对外暴露的"要初始化的目录列表"
@@ -148,6 +179,7 @@ def get_dirs_to_initialize() -> List[Path]:
         # 元工具审计日志,不属于业务 reset 清理范围
         META_LOGGING_DIR,
         DATASET_CONFIGS_DIR,
+        RUNTIME_CONFIGS_DIR,    # D5: 运行配置目录(用户立刻要往里放东西,启动时建好)
     ]
 
 

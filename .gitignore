@@ -81,3 +81,5 @@ temp/
 *.pkl
 *.h5
 *.npz
+# D5: odp-gen-config 覆盖前的自动备份(运行时产物,不入库)
+apps/platform/configs/runtime/*.bak.*
